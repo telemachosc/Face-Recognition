@@ -1,0 +1,3 @@
+[submodule "Keras-OpenFace"]
+	path = Keras-OpenFace
+	url = https://github.com/iwantooxxoox/Keras-OpenFace.git
