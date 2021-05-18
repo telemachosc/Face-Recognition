@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 
 
 # load faces
-data = load('european-dataset.npz')
+data = load('data/datasets/european-dataset.npz')
 testX_faces = data['arr_2']
 # load face embeddings
-data = load('european-faces-embeddings.npz')
+data = load('data/datasets/european-faces-embeddings.npz')
 trainX, trainy, testX, testy = data['arr_0'], data['arr_1'], data['arr_2'], data['arr_3']
 
 # normalize input vectors
@@ -38,6 +38,7 @@ model = SVC(kernel='linear', probability=True)
 model.fit(trainX, trainy)
 
 # test model on all examples from the test dataset
+res = []
 for image in range(testX.shape[0]):
    
     random_face_pixels = testX_faces[image]
@@ -53,6 +54,7 @@ for image in range(testX.shape[0]):
     class_index = yhat_class[0]
     class_probability = yhat_prob[0,class_index] * 100
     predict_names = out_encoder.inverse_transform(yhat_class)
+    res.append([predict_names[0], random_face_name[0], class_probability])
     print('Predicted: %s (%.3f)' % (predict_names[0], class_probability))
     print('Expected: %s' % random_face_name[0])
     # plot for fun
@@ -61,6 +63,12 @@ for image in range(testX.shape[0]):
     plt.title(title)
     plt.show()
 
+import pandas as pd
+
+df = pd.DataFrame(res, columns=("Prediction", "Expectation", "Probabilty of prediction"))
+df['Probabilty of prediction'].mean()
+#%%
+df.to_excel('results.xlsx')
 
 # original code
 # test model on a random example from the test dataset

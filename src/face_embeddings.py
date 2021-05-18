@@ -6,11 +6,10 @@ Created on Thu May  6 14:15:03 2021
 """
 
 # calculate a face embedding for each face in the dataset using facenet
-from numpy import load
-from numpy import expand_dims
-from numpy import asarray
-from numpy import savez_compressed
+import numpy as np
 from keras.models import load_model
+import tensorflow as tf
+tf.get_logger().setLevel('ERROR')
 
 # get the face embedding for one face
 def get_embedding(model, face_pixels):
@@ -20,13 +19,13 @@ def get_embedding(model, face_pixels):
 	mean, std = face_pixels.mean(), face_pixels.std()
 	face_pixels = (face_pixels - mean) / std
 	# transform face into one sample
-	samples = expand_dims(face_pixels, axis=0)
+	samples = np.expand_dims(face_pixels, axis=0)
 	# make prediction to get embedding
 	yhat = model.predict(samples)
 	return yhat[0]
 
 # load the face dataset
-data = load('european-dataset.npz')
+data = np.load('data/datasets/european-dataset.npz', allow_pickle=True)
 trainX, trainy, testX, testy = data['arr_0'], data['arr_1'], data['arr_2'], data['arr_3']
 print('Loaded: ', trainX.shape, trainy.shape, testX.shape, testy.shape)
 # load the facenet model
@@ -37,14 +36,14 @@ newTrainX = list()
 for face_pixels in trainX:
 	embedding = get_embedding(model, face_pixels)
 	newTrainX.append(embedding)
-newTrainX = asarray(newTrainX)
+newTrainX = np.asarray(newTrainX)
 print(newTrainX.shape)
 # convert each face in the test set to an embedding
 newTestX = list()
 for face_pixels in testX:
 	embedding = get_embedding(model, face_pixels)
 	newTestX.append(embedding)
-newTestX = asarray(newTestX)
+newTestX = np.asarray(newTestX)
 print(newTestX.shape)
 # save arrays to one file in compressed format
-savez_compressed('european-faces-embeddings.npz', newTrainX, trainy, newTestX, testy)
+np.savez_compressed('data/datasets/european-faces-embeddings.npz', newTrainX, trainy, newTestX, testy)
