@@ -7,7 +7,7 @@ Created on Thu May  6 14:15:03 2021
 
 # calculate a face embedding for each face in the dataset using facenet
 import numpy as np
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 

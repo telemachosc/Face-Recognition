@@ -15,6 +15,9 @@ from mtcnn.mtcnn import MTCNN
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 
+
+
+
 # extract a single face from a given photograph
 def extract_face(filename, required_size=(160, 160)):
  	# load image from file

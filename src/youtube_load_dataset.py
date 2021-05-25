@@ -22,28 +22,31 @@ def pathmaker(path):
 
 # extract a single face from a given photograph
 def extract_face(filename, required_size=(160, 160)):
- 	# load image from file
- 	image = Image.open(filename)
- 	# convert to RGB, if needed
- 	image = image.convert('RGB')
- 	# convert to array
- 	pixels = np.asarray(image)
- 	# create the detector, using default weights
- 	detector = MTCNN()
- 	# detect faces in the image
- 	results = detector.detect_faces(pixels)
- 	# extract the bounding box from the first face
- 	x1, y1, width, height = results[0]['box']
- 	# bug fix
- 	x1, y1 = abs(x1), abs(y1)
- 	x2, y2 = x1 + width, y1 + height
- 	# extract the face
- 	face = pixels[y1:y2, x1:x2]
- 	# resize pixels to the model size
- 	image = Image.fromarray(face)
- 	image = image.resize(required_size)
- 	face_array = np.asarray(image)
- 	return face_array
+    # load image from file
+    image = Image.open(filename)
+    # convert to RGB, if needed
+    image = image.convert('RGB')
+    # convert to array
+    pixels = np.asarray(image)
+    # create the detector, using default weights
+    detector = MTCNN()
+    # detect faces in the image
+    results = detector.detect_faces(pixels)
+    if results != []:
+        # extract the bounding box from the first face
+        x1, y1, width, height = results[0]['box']
+        # bug fix
+        x1, y1 = abs(x1), abs(y1)
+        x2, y2 = x1 + width, y1 + height
+        # extract the face
+        face = pixels[y1:y2, x1:x2]
+        # resize pixels to the model size
+        image = Image.fromarray(face)
+        image = image.resize(required_size)
+        face_array = np.asarray(image)
+        return face_array
+    else:
+        return None
 
 def load_faces(directory):
     faces = list()
@@ -53,7 +56,7 @@ def load_faces(directory):
         path = os.path.join(directory, subdir)
         for filename in listdir(path):
             filepath = os.path.join(path,filename)
-            print(filename)
+            # print(filename)
             # get face
             face = extract_face(filepath)
             # store
@@ -82,12 +85,28 @@ def load_dataset(directory):
     return np.asarray(X), np.asarray(y)
 
 
-path = ("C:\/Users/telemachos/Documents/Programming/python/"+
-        "projects/Celebrity detection/datasets/youtube/aligned_images_DB")
+if __name__=='__main__':
+    paths = {"server": ["/data/tchatz/aligned_images_DB",
+                        "/data/tchatz/datasets/youtube-faces-embeddings.npz"],
+             "local": ["../../Celebrity detection/datasets/youtube/aligned_images_DB",
+                       "../data/datasets"]
+             }
 
-npath = pathmaker(path)
 
-x, y = load_dataset(npath)
-
+    path = paths['server']
+    
+    # npath = pathmaker(path)
+    
+    x, y = load_dataset(path[0])
+    
+    # randomize elements in the arrays for better results
+    np.random.shuffle(x)
+    np.random.shuffle(y)
+    
+    # slice x,y to get train and test splits
+    trainx, testx = np.split(x, [int(len(x)*0.9)])
+    trainy, testy = np.split(y, [int(len(y)*0.9)])
+    
+    np.savez_compressed(path[1], trainx, trainy, testx, testy)
 #%%
 
