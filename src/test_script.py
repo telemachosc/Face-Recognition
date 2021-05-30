@@ -9,15 +9,32 @@ from mtcnn import MTCNN
 import cv2
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
 
-file = "data/aligned_detect_2.1718.jpg"
 
-img = cv2.cvtColor(cv2.imread(file), cv2.COLOR_BGR2RGB)
-detector = MTCNN()
-
-detected_faces = detector.detect_faces(img)
 
 #%%
+
+def draw_face_box(path):
+    img = cv2.cvtColor(cv2.imread(file), cv2.COLOR_BGR2RGB)
+    detector = MTCNN()
+    detected_faces = detector.detect_faces(img)
+    
+    x, y, k, l = detected_faces[0]['box']
+    
+    start, end = (x, y), (x+k, y+l)
+    
+    rect_color = (0, 255, 0)
+    
+    thickness = 1
+
+    cv2.rectangle(img, start, end, rect_color, thickness)
+    fig, ax = plt.subplots(2)
+    ax[0].imshow(img)
+    ax[1].imshow(img[y:y+l, x:x+k])
+    # plt.show()
+    return detected_faces
+    
 
 def extract_face(filename, required_size=(160, 160)):
     # load image from file
@@ -60,14 +77,26 @@ def imshow(img):
     cv2.destroyAllWindows()
     
 #%%
-test = extract_face(crop)
+
+file = "data/youtube/aligned_images_DB/Aaron_Eckhart/0/aligned_detect_0.575.jpg"
+
+
+
+box = draw_face_box(file)
+#%%
+
+img = cv2.cvtColor(cv2.imread(file), cv2.COLOR_BGR2RGB)
+detector = MTCNN()
+detected_faces = detector.detect_faces(img)
+    
+x, y, k, l = detected_faces[0]['box']
+
+plt.imshow(img[x:x+k, y:y+l])
+plt.show()
+
 
 #%%
-import matplotlib.pyplot as plt
 
-for face in test:
-    plt.imshow(face)
-    plt.show()
 
 #%%
 crop =crop_image(img, **{'x': 50,
@@ -75,4 +104,12 @@ crop =crop_image(img, **{'x': 50,
                  'y': 50,
                  'y_': 150})
 #%%
-crop_detection = detector.detect_faces(crop)
+
+
+#%%
+test = extract_face(crop)
+
+
+for face in test:
+    plt.imshow(face)
+    plt.show()

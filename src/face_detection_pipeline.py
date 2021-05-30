@@ -6,36 +6,38 @@ Created on Mon May 24 17:21:02 2021
 """
 
 import os
+import platform
 
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-import numpy as np
 from mtcnn.mtcnn import MTCNN
-# from tensorflow.keras.models import load_model
+# import numpy as np
+tf.get_logger().setLevel('ERROR')
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+import time
 
 
-def load_paths(path: str , trainpct: float, valpct: float) -> dict:
-    # Remake path to make it OS compatible
-    path = os.path.join(*path.split('/'))
-    
-    x_list = []
+def load_paths(path: str , trainpct: float, valpct: float) -> dict:    
+    x = []
     labels_list = []
     
     for base, dirs, files in os.walk(path):
         if files:
-            x_list.extend([base+os.sep+file for file in files])
-            labels_list.extend([base.split('\\')[-2] for _ in range(len(files))])
+            x.extend([base+os.sep+file for file in files])
+            if platform.system()=='Windows':
+                labels_list.extend([base.split('\\')[-2] for _ in range(len(files))])
+            else:
+                labels_list.extend([base.split('/')[-2] for _ in range(len(files))])
             
     # Make dictionaries for x and y with correct names
-    x = {f"id_{num}": file for num, file in enumerate(x_list)}
-    labels = {f"id_{num}": label for num, label in enumerate(labels_list)}
+    labels = {inpt: label for inpt, label in zip(x, labels_list)}
     
     # Split train, validation and test sets
-    train = dict(list(x.items())[:int(len(x)*trainpct)])
-    tmp = dict(list(x.items())[int(len(x)*trainpct):])
-    val = dict(list(tmp.items())[:int(len(x)*valpct)])
-    test = dict(list(tmp.items())[int(len(x)*valpct):])
+    train = x[:int(len(x)*trainpct)]
+    tmp = x[int(len(x)*trainpct):]
+    val = tmp[:int(len(x)*valpct)]
+    test = tmp[int(len(x)*valpct):]
     
     # Check if train, val and test have the same length as x
     if not len(train) + len(val) + len(test) == len(x):
@@ -72,6 +74,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         # Generate data
         X, y = self.__data_generation(list_IDs_temp)
+        # X, y = np.random.uniform(0, 1, (32,160,160,3)), np.random.uniform(0, 1, 32)
 
         return X, y
 
@@ -89,21 +92,26 @@ class DataGenerator(tf.keras.utils.Sequence):
         # convert to array
         pixels = np.asarray(image)
         # create the detector, using default weights
+        s = time.time()
         detector = MTCNN()
         # detect faces in the image
         results = detector.detect_faces(pixels)
-        # extract the bounding box from the first face
-        x1, y1, width, height = results[0]['box']
-        # bug fix
-        x1, y1 = abs(x1), abs(y1)
-        x2, y2 = x1 + width, y1 + height
-        # extract the face
-        face = pixels[y1:y2, x1:x2]
-        # resize pixels to the model size
-        image = Image.fromarray(face)
-        image = image.resize(self.dim)
-        face_array = np.asarray(image)
-        return face_array
+        print(time.time()-s)
+        if results != []:
+            # extract the bounding box from the first face
+            x1, y1, width, height = results[0]['box']
+            # bug fix
+            x1, y1 = abs(x1), abs(y1)
+            x2, y2 = x1 + width, y1 + height
+            # extract the face
+            face = pixels[y1:y2, x1:x2]
+            # resize pixels to the model size
+            image = Image.fromarray(face)
+            image = image.resize(self.dim)
+            face_array = np.asarray(image)
+            return face_array
+        else:
+            return None
 
     def __data_generation(self, list_IDs_temp):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
@@ -114,38 +122,47 @@ class DataGenerator(tf.keras.utils.Sequence):
         # Generate data
         for i, ID in enumerate(list_IDs_temp):
             face_pixels = self.extract_face(ID)
-            face_pixels = face_pixels.astype('float32')
-            # standardize pixel values across channels (global)
-            mean, std = face_pixels.mean(), face_pixels.std()
-            # Store sample
-            X[i,] = (face_pixels - mean) / std
-            
-            # X[i,] = np.load('data/' + ID + '.npy')
+            if isinstance(face_pixels, np.ndarray):
+                face_pixels = face_pixels.astype('float32')
+                # standardize pixel values across channels (global)
+                mean, std = face_pixels.mean(), face_pixels.std()
+                # Store sample
+                X[i,] = (face_pixels - mean) / std
+                
+                # X[i,] = np.load('data/' + ID + '.npy')
+    
+                # Store class
+                y[i] = int(self.labels[ID] == self.n_classes)
 
-            # Store class
-            y[i] = self.labels[ID]
-
-        return X, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
+        return X, y
 
 
 
 
 
 if __name__=="__main__":
-    partition, labels = load_paths("data/youtube/aligned_images_DB", 0.8, 0.1)
+    path = {'local': "data/youtube/aligned_images_DB",
+            'server': '/data/tchatz/aligned_images_DB'}
+    # Remake path to make it windows compatible
+    if platform.system()=='Windows':
+        path = os.path.join(*path['local'].split('/'))
+    else: 
+        path = path['server']
+        
+    partition, labels = load_paths(path, 0.8, 0.1)
     
     num_classes = len(set(val for val in labels.values()))
     
     params = {
         'dim': (160,160),
-        'batch_size': 64,
+        'batch_size': 32,
         'n_classes': num_classes,
         'n_channels': 3,
         'shuffle': True
         }
     
     training_generator = DataGenerator(partition['train'], labels, **params)
-    validation_generator = DataGenerator(partition['validation'], labels, **params)
+    validation_generator = DataGenerator(partition['val'], labels, **params)
     
     # Load the facenet model
     facenet = tf.keras.models.load_model('keras-facenet/model/facenet_keras.h5')
@@ -155,7 +172,7 @@ if __name__=="__main__":
     
     # Classifier design
     layer2 = tf.keras.layers.Flatten()
-    layer3 = tf.keras.layers.Dense(num_classes, activation='softmax',
+    layer3 = tf.keras.layers.Dense(1, activation='softmax',
                                    kernel_regularizer=tf.keras.regularizers.L1L2(l1=0.01, l2=0.1))
     classifier = tf.keras.Sequential([facenet, layer2, layer3])
     
@@ -177,9 +194,8 @@ if __name__=="__main__":
     epochs = 10
     
     # Train model on dataset
-    classifier.fit_generator(generator=training_generator,
+    classifier.fit(x=training_generator,
                              epochs=epochs,
                              validation_data=validation_generator,
                              callbacks = [checkpoint],
-                             use_multiprocessing=True,
-                             workers=6)
+                             )
