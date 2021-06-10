@@ -15,6 +15,8 @@ import json
 import numpy as np
 import PIL
 from sklearn.preprocessing import LabelBinarizer
+
+from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 
@@ -295,7 +297,7 @@ if __name__=="__main__":
     num_classes = 1595
     
     params = {
-        'dim': (160,160),
+        'dim': (299,299),
         'batch_size': 64,
         'n_classes': num_classes,
         'n_channels': 3,
@@ -311,30 +313,34 @@ if __name__=="__main__":
     
     
     # Model hyperparameters
-    EPOCHS = [10,20, 30, 40]
-    LRs = [1e-03, 5e-4, 1e-04]
-    FINE_TUNE_LAYERS = [10, 20, 30, 40, 50]
+    EPOCHS = [20]
+    LRs = [1e-04]
+    FINE_TUNE_LAYERS = [10]
     
     # History filename
-    hfname = 'youtube_003'
+    hfname = 'youtube_011'
     
     
     def train_model(epochs, lr, fine_tune_layers):
         
         # Load the facenet model
-        facenet = tf.keras.models.load_model('keras-facenet/model/facenet_keras.h5')
+        # facenet = tf.keras.models.load_model('keras-facenet/model/facenet_keras.h5')
+        
+        base_model = InceptionResNetV2(include_top=False, 
+                                       weights='imagenet',
+                                       input_shape=(299,299,3))
         
         # Freeze facenet from training
-        facenet.trainable = False
+        base_model.trainable = False
         
         # Cut the last n layers of the base model
-        facenet = tf.keras.models.Model(facenet.input, facenet.layers[-3].output)
+        # base_model = tf.keras.models.Model(base_model.input, base_model.layers[-3].output)
         
         # for layer in facenet.layers:
         #    layer.trainable = False
     
         if fine_tune_layers > 0:
-            for layer in facenet.layers[-fine_tune_layers:]:
+            for layer in base_model.layers[-fine_tune_layers:]:
                 if not isinstance(layer, tf.keras.layers.BatchNormalization):
                     layer.trainable = True
     
@@ -343,14 +349,16 @@ if __name__=="__main__":
              
         # Classifier design
         layers = {
+            0: tf.keras.Input(shape=(299,299,3)),
             # 2: tf.keras.layers.Dense(units=256, activation='relu'),
             # 3: tf.keras.layers.Dropout(.5),
             # 1: tf.keras.layers.Flatten(),
-            # 5: tf.keras.layers.Dense(1752, activation='relu'),
-            4: tf.keras.layers.Dense(num_classes, activation='softmax')
+            # 4: tf.keras.layers.Dense(1752, activation='relu'),
+            5: tf.keras.layers.GlobalAveragePooling2D(),
+            6: tf.keras.layers.Dense(num_classes, activation='softmax')
             }
         
-        classifier = tf.keras.Sequential([facenet, *layers.values()])
+        classifier = tf.keras.Sequential([base_model, *layers.values()])
         
         lm = { 'sparse': [tf.keras.losses.SparseCategoricalCrossentropy(),
                           'sparse_categorical_accuracy'],

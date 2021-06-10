@@ -90,6 +90,7 @@ class BBox(DataGenerator):
         # convert to array
         pixels = np.asarray(image)
         
+        # TODO: This needs to be more generic. For celeb_a is fine
         # extract the bounding box from the first face
         x1, y1, width, height = self.df.loc[self.df['path']==filename].values[0][2:6]
         # bug fix
