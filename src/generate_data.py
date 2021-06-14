@@ -12,7 +12,8 @@ import PIL
 class DataGenerator(tf.keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, labels, batch_size=32, dim=(160,160), 
-                 n_channels=3, n_classes=10, shuffle=True, df=[]):
+                 n_channels=3, n_classes=10, shuffle=True, df=[],
+                 norm_type=None):
         'Initialization'
         self.dim = dim
         self.batch_size = batch_size
@@ -22,6 +23,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.df = df
+        self.norm_type = norm_type
         self.on_epoch_end()
 
     def __len__(self):
@@ -56,6 +58,14 @@ class DataGenerator(tf.keras.utils.Sequence):
         # resize pixels to the model size
         image = image.resize(self.dim)
         return np.asarray(image)
+    
+    def normalizer(self, image):
+        if self.norm_type==None:
+            return image.astype('float32')
+        if self.norm_type=='standardization':
+            image = image.astype('float32')
+            mean, std = image.mean(), image.std()
+            return (image - mean) / std
 
     def __data_generation(self, list_IDs_temp):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
@@ -67,11 +77,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         for i, ID in enumerate(list_IDs_temp):
             face_pixels = self.extract_face(ID)
 
-            face_pixels = face_pixels.astype('float32')
-            # standardize pixel values across channels (global)
-            mean, std = face_pixels.mean(), face_pixels.std()
             # Store sample
-            X[i] = (face_pixels - mean) / std
+            X[i] = self.normalizer(face_pixels)
             
             # Store class
             y[i]= self.labels[ID] - 1

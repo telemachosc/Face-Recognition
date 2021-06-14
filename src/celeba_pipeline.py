@@ -10,7 +10,7 @@ import time
 
 import pandas as pd
 import tensorflow as tf
-from tensorboard.plugins.hparams import api as hp
+from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2, preprocess_input
 
 from src.generate_data import DataGenerator
 from src.misc import write_history, step_decay_schedule
@@ -185,12 +185,13 @@ if __name__=="__main__":
     num_classes = len(set(val for val in full_df['identity']))
     
     params = {
-        'dim': (160, 160),
-        'batch_size': 64,
+        'dim': (299, 299),
+        'batch_size': 32,
         'n_classes': num_classes,
         'n_channels': 3,
         'shuffle': True,
-        'df': full_df
+        'df': full_df,
+        'norm_type': 'standardization'
         }
     
     training_generator = DataGenerator(partition['train'], labels, **params)
@@ -198,43 +199,69 @@ if __name__=="__main__":
     test_generator = DataGenerator(partition['test'], labels, **params)
     
     # Model hyperparameters
-    EPOCHS = [10,20, 30, 40]
-    LRs = [1e-03, 5e-4, 1e-04]
-    FINE_TUNE_LAYERS = [10, 20, 30, 40, 50]
+    EPOCHS = [20]
+    LRs = [1e-04]
+    FINE_TUNE_LAYERS = [10]
+    # EPOCHS = [10,20, 30, 40]
+    # LRs = [1e-03, 5e-4, 1e-04]
+    # FINE_TUNE_LAYERS = [10, 20, 30, 40, 50]
     
     # History filename
     hfname = 'celeba_004'
     
-    def train_model(epochs, lr, fine_tune_layers):
+    def train_model(epochs, lr, fine_tune_layers, params):
         
-        # Load the facenet model
-        facenet = tf.keras.models.load_model('keras-facenet/model/facenet_keras.h5')
+        # facenet model path
+        # facenet_path = 'keras-facenet/model/facenet_keras.h5'
+        img_size = (*params['dim'], params['n_channels'])
         
-        # Freeze facenet from training
-        facenet.trainable = False
+        
+        base_model = InceptionResNetV2(include_top=False, 
+                                       weights='imagenet',
+                                       input_shape=img_size)
+        
+         # Freeze base model from training
+        base_model.trainable = False
         
         # for layer in facenet.layers:
         #    layer.trainable = False
     
         if fine_tune_layers > 0:
-            for layer in facenet.layers[-fine_tune_layers:]:
+            for layer in base_model.layers[-fine_tune_layers:]:
                 if not isinstance(layer, tf.keras.layers.BatchNormalization):
                     layer.trainable = True
+        
+        layer =  tf.keras.layers.GlobalAveragePooling2D()(base_model.layers[-1].output)
+        
+        output = tf.keras.layers.Dense(num_classes, activation='softmax')(layer)
+        
+        classifier = tf.keras.Model(base_model.inputs, output)
+        
+       
     
-        # for layer in facenet.layers[-fine_tune_layers:]:
-        #     print(layer, layer.trainable)
-             
+
         # Classifier design
-        layers = {
-            # 2: tf.keras.layers.Dense(units=256, activation='relu'),
-            # 3: tf.keras.layers.Dropout(.5),
-            # 1: tf.keras.layers.Flatten(),
-            # 5: tf.keras.layers.Dense(1752, activation='relu'),
-            4: tf.keras.layers.Dense(num_classes, activation='softmax')
-            }
         
-        classifier = tf.keras.Sequential([facenet, *layers.values()])
+        # input_layer = tf.keras.layers.Input(shape=img_size)
         
+        # model_input = preprocess_input(input_layer)
+        # x = base_model(model_input)
+        # x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        # output = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+        
+        # classifier = tf.keras.Model(input_layer, output)
+        
+        # layers = {
+        #     0: tf.keras.Input(shape=(299,299,3)),
+        #     # 2: tf.keras.layers.Dense(units=256, activation='relu'),
+        #     # 3: tf.keras.layers.Dropout(.5),
+        #     # 1: tf.keras.layers.Flatten(),
+        #     # 4: tf.keras.layers.Dense(1752, activation='relu'),
+        #     5: tf.keras.layers.GlobalAveragePooling2D(),
+        #     6: tf.keras.layers.Dense(num_classes, activation='softmax')
+        #     }
+        
+        # classifier = tf.keras.Sequential([base_model, *layers.values()])
         lm = { 'sparse': [tf.keras.losses.SparseCategoricalCrossentropy(),
                           'sparse_categorical_accuracy'],
               'dense': ['categorical_crossentropy',
@@ -272,5 +299,5 @@ if __name__=="__main__":
                 print(f'--- Starting trial: run-{session_num}')
                 print((f'Epochs: {epoch}, Learning rate: {lr}, '+
                        f'Fine tune layers: {fnl}'))
-                train_model(epoch, lr, fnl)
+                train_model(epoch, lr, fnl, params)
                 session_num+=1

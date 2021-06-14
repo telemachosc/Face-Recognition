@@ -6,7 +6,7 @@ Created on Mon May 17 14:59:54 2021
 """
 import os
 
-APP_FOLDER = "data/youtube/aligned_images_DB"
+APP_FOLDER = "data\youtube_resnet_inference"
 
 totalFiles = 0
 totalDir = 0

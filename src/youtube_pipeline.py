@@ -14,7 +14,7 @@ import tensorflow as tf
 import json
 import numpy as np
 import PIL
-from sklearn.preprocessing import LabelBinarizer
+from sklearn.preprocessing import LabelBinarizer, LabelEncoder
 
 from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
@@ -46,7 +46,7 @@ def write_history(name: str, h: dict, test_set: list, time: float,
                            '-------------------------------\n'))
         convert_file.write(('Train configuration for that experiment was:\n'+
                             f'Epochs: {epoch},\nLearning rate: {lr},\n'+
-                            f'Fine tune layers: {fnl}'))
+                            f'Fine tune layers: {fnl}\n\n'))
         convert_file.write(('Loss and accuracy on train and validation set\n'))
         convert_file.write(json.dumps(h, indent=2))
         convert_file.write(('\n\n'+ 
@@ -61,16 +61,21 @@ def load_paths(path: str , trainpct: float, valpct: float) -> dict:
     x = []
     labels_list = []
     
+    # Make two lists for input and labels
     for base, dirs, files in os.walk(path):
         if files:
+            # Extend the paths of images in list x
             x.extend([base+os.sep+file for file in files])
             if platform.system()=='Windows':
+                # Slice the name part of the path and extend it in labels list
                 labels_list.extend([base.split('\\')[-2] for _ in range(len(files))])
             else:
                 labels_list.extend([base.split('/')[-2] for _ in range(len(files))])
     
-    # Shuffle the x
-    random.shuffle(x)
+
+    le = LabelEncoder()
+    
+    le.fit_transform(labels_list)
     
     # One hot encode the labels
     encoder = LabelBinarizer()
@@ -79,6 +84,9 @@ def load_paths(path: str , trainpct: float, valpct: float) -> dict:
     
     # Make dictionaries for x and y with correct names
     labels = {inpt: label for inpt, label in zip(x, labels_list)}
+    
+    # Shuffle the x
+    random.shuffle(x)
     
     # Split train, validation and test sets
     train = x[:int(len(x)*trainpct)]
@@ -321,11 +329,11 @@ if __name__=="__main__":
     hfname = 'youtube_011'
     
     
-    def train_model(epochs, lr, fine_tune_layers):
+    def train_model(epochs, lr, fine_tune_layers, params):
         
         # Load the facenet model
         # facenet = tf.keras.models.load_model('keras-facenet/model/facenet_keras.h5')
-        
+        img_size = (*params['dim'], params['n_channels'])
         base_model = InceptionResNetV2(include_top=False, 
                                        weights='imagenet',
                                        input_shape=(299,299,3))
@@ -348,6 +356,14 @@ if __name__=="__main__":
         #     print(layer, layer.trainable)
              
         # Classifier design
+        # input_layer = tf.keras.layers.Input(shape=img_size)
+        
+        # model_input = tf.keras.applications.inception_resnet_v2.preprocess_input(input_layer)
+        # x = base_model(input_layer)
+        # x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        # output = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+        
+        # classifier = tf.keras.Model(input_layer, output)
         layers = {
             0: tf.keras.Input(shape=(299,299,3)),
             # 2: tf.keras.layers.Dense(units=256, activation='relu'),
@@ -398,5 +414,5 @@ if __name__=="__main__":
                 print(f'--- Starting trial: run-{session_num}')
                 print((f'Epochs: {epoch}, Learning rate: {lr}, '+
                        f'Fine tune layers: {fnl}'))
-                train_model(epoch, lr, fnl)
+                train_model(epoch, lr, fnl, params)
                 session_num+=1
